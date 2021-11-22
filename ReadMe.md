@@ -93,3 +93,50 @@ This solution smells wrong in at least three ways:
 I'm at a loss in what should be a really simple problem. At work, it's become a blocker, which is why I created a toy project and also why I'm here at the forum asking for help.
 
 Any help is much appreciated!
+
+### Addendum
+
+I did find a solution where the state of the presented view is scoped from the state of the presenting view but it seems to work only if/when the state of the child is scoped at the time the child view is initialised, as follows:
+
+```swift
+public struct View: SwiftUI.View {
+
+    @SwiftUI.Environment(\.dismiss) private var dismiss
+
+    private let store: Store<State, Action>
+    @ObservedObject private var viewStore: ViewStore<State, Action>
+
+    private var destination: IfLetStore<BScene.State, BScene.Action, BScene.View?>
+    private var isActive: Binding<Bool>
+
+    public init(store: Store<State, Action>) {
+        self.store = store
+        let viewStore = ViewStore(store)
+        self.viewStore = viewStore
+        let childStore = store.scope(
+            state: { $0.routeState(for: /State.Route.child) },
+            action: Action.child
+        )
+        self.destination = IfLetStore(childStore, then: BScene.View.init(store:))
+        self.isActive = viewStore.binding(
+            get: { $0.isRoutingTo(/State.Route.child) },
+            send: Action.presentChild
+        )
+    }
+
+    public var body: some SwiftUI.View {
+        VStack {
+            // ...
+
+            Button(action: { viewStore.send(.presentChild(true)) }) { Text("Push") }
+            NavigationLink("", destination: destination, isActive: isActive)
+
+            // ...
+        }
+        // ...
+    }
+
+}
+```
+
+It's not clear to me that this solution is free from problems but it appears to work.
